@@ -1,13 +1,9 @@
-﻿#include <iostream>
+﻿#include <chrono>
 #include <thread>
-#include <mutex>
-#include <vector>
-#include <chrono>
-#include <ctime>
+#include <iostream>
 
-using namespace std;
-
-class MyTimer {
+class MyTimer 
+{
 public:
 	void Start();
 	void End();
@@ -17,7 +13,6 @@ private:
 	std::chrono::time_point<std::chrono::steady_clock> start, finish;
 	std::chrono::duration<float> duration;
 };
-
 
 void MyTimer::Start() 
 {
@@ -32,7 +27,7 @@ void MyTimer::End()
 	std::cout << "Прошло время: " << result << " секунд " << std::endl;
 }
 
-float MyTimer::GetElapsedTime()
+float MyTimer::GetElapsedTime() 
 {
 	finish = std::chrono::high_resolution_clock::now();
 	duration = finish - start;
@@ -40,91 +35,84 @@ float MyTimer::GetElapsedTime()
 	return result;
 }
 
+#include <iostream>
+#include<thread>
+#include<mutex>
+#include <vector>
+#include<ctime>
+
+using namespace std;
 mutex mtx;
-void findMin(vector<int> vect, int begin, int end, int& min) 
+void findMin(vector<int>& vect, int begin, int end, float& threadTime, int& min, MyTimer* timer) 
 {
+	timer->Start();
 	min = vect[begin];
 	for (; begin < end; begin++)
-		if (min > vect[begin])
+		if (min > vect[begin]) 
 		{
 			min = vect[begin];
 		}
-		mtx.lock();
-		cout << "Индификатор: " << this_thread::get_id() << " Локальный минимальный элемент: " << min << endl;
-		mtx.unlock();
+	threadTime += timer->GetElapsedTime();
+
+	mtx.lock();
+	cout << "Индификатор: " << this_thread::get_id() << " Локальный минимальный элемент: " << min << endl;
+	mtx.unlock();
 }
 
-
 int main() {
-	srand(time(NULL));
-	setlocale(0, "");
+	srand(time(nullptr));
+	setlocale(0, "ru");
 	int N, numberOfThread, min;
 	vector<int> vect, minVect;
 	MyTimer* timer = new MyTimer();
-
-	cout << "Введите количество элементов: ";
-	cin >> N;
-	if (N <= 0) //обработка искл. ситуац.
+	float elapsedTime = 0;
+	cout << "Введите количество элементов: "; cin >> N;
+	if (N <= 0) 
 	{
 		cout << "Ошибка" << endl;
 		return 1;
 	}
 	vect.resize(N);
 	for (int i = 0; i < N; i++)
-	{
 		vect[i] = rand() % N - N / 2;
-	}
-	cout << "Введите количество потоков: ";
-	cin >> numberOfThread;
+	cout << "Введите количество потоков: "; cin >> numberOfThread;
 
 	if (numberOfThread <= 0) 
 	{
-		findMin(vect, 0, N, min);
+		findMin(vect, 0, N, elapsedTime, min, timer);
 		cout << "Минимальный элемент: " << min << endl;
 		system("pause");
 		return 0;
 	}
-
-	//работа с потоками
 	minVect.resize(numberOfThread);
 	thread* arrThread = new thread[numberOfThread];
 	int sizeOfWork = N / numberOfThread;
-	float elapsedTime = 0;
 	for (int i = 0; i < numberOfThread; i++) 
 	{	
 		int beg = i * sizeOfWork;
 		int end;
 		if (i == numberOfThread - 1)
-		{
 			end = N;
-		}
 		else
-		{
 			end = (i + 1) * sizeOfWork;
-		}
-		timer->Start();
-		arrThread[i] = thread(findMin, vect, beg, end, std::ref(minVect[i]));
-		elapsedTime = timer->GetElapsedTime() + elapsedTime;
+		arrThread[i] = thread(findMin, std::ref(vect), beg, end, std::ref(elapsedTime),
+			std::ref(minVect[i]), timer);
 	}
 	for (int i = 0; i < numberOfThread; i++)
-	{
 		arrThread[i].join();
-	}
 	cout << endl << endl << "                  ----   Потоки закончили свою работу   ----          " << endl << endl;
-
-	timer->Start();
-	findMin(minVect, 0, minVect.size(), min);
+	findMin(minVect, 0, minVect.size(), elapsedTime, min, timer);
 	cout << "Минимальный элемент: " << min << endl;
-	elapsedTime = timer->GetElapsedTime() + elapsedTime;
-	cout << "Прошло время для асинхронной работы: " << elapsedTime << endl;
-	cout << endl << endl;
-	timer->Start();
-	findMin(vect, 0, N, min);
-	cout << "Минимальный элемент среди экстремумов: " << min << endl;
-	timer->End();
+	cout << "Прошло время для асинхронной работы: " << fixed << elapsedTime << endl;
 
-	//освобождение памяти:
+	elapsedTime = 0;
+	cout << endl << endl;
+	findMin(vect, 0, N, elapsedTime, min, timer);
+	cout << "Минимальный элемент среди экстремумов: " << min << endl;
+	cout << "Прошло время: " << fixed << elapsedTime << " секунд " << std::endl;
 	delete[] arrThread;
 	delete timer;
+	system("pause");
+
 	return 0;
 }
