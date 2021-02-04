@@ -1,9 +1,8 @@
-﻿#include <chrono>
+#include <chrono>
 #include <thread>
 #include <iostream>
 
-class MyTimer 
-{
+class MyTimer{
 public:
 	void Start();
 	void End();
@@ -14,21 +13,18 @@ private:
 	std::chrono::duration<float> duration;
 };
 
-void MyTimer::Start() 
-{
+void MyTimer::Start() {
 	start = std::chrono::high_resolution_clock::now();
 }
 
-void MyTimer::End() 
-{
+void MyTimer::End() {
 	finish = std::chrono::high_resolution_clock::now();
 	duration = finish - start;
 	float result = duration.count();
 	std::cout << "Прошло время: " << result << " секунд " << std::endl;
 }
 
-float MyTimer::GetElapsedTime() 
-{
+float MyTimer::GetElapsedTime() {
 	finish = std::chrono::high_resolution_clock::now();
 	duration = finish - start;
 	float result = duration.count();
@@ -42,77 +38,98 @@ float MyTimer::GetElapsedTime()
 #include<ctime>
 
 using namespace std;
+
 mutex mtx;
-void findMin(vector<int>& vect, int begin, int end, float& threadTime, int& min, MyTimer* timer) 
-{
-	timer->Start();
+
+void findMinInPart(const vector<int> &vect, const int &begin, const int &end, int &min) {
 	min = vect[begin];
-	for (; begin < end; begin++)
-		if (min > vect[begin]) 
-		{
-			min = vect[begin];
+	for (int i = begin + 1; i < end; ++i) {
+		if (min > vect[i]) {
+			min = vect[i];
 		}
-	threadTime += timer->GetElapsedTime();
+	}
 
 	mtx.lock();
 	cout << "Индификатор: " << this_thread::get_id() << " Локальный минимальный элемент: " << min << endl;
 	mtx.unlock();
 }
+int findMinAsync(vector<int> &vect, int threadsNum)
+{
+	int *minElements = new int[threadsNum];
+	thread *arrThread = new thread[threadsNum];
+	int partSize = vect.size() / threadsNum;
+
+	for (int i = 0; i < threadsNum; ++i) {
+		arrThread[i] = thread(findMinInPart, std::ref(vect), partSize * i, partSize * (i + 1), std::ref(minElements[i]));
+	}
+
+	for (int i = 0; i < threadsNum; ++i)
+		arrThread[i].join();
+
+	int minElement = minElements[0];
+	for (int i = 1; i < threadsNum; ++i) {
+		if (minElement > minElements[i]) {
+			minElement = minElements[i];
+		}
+	}
+
+	mtx.lock();
+	cout << "Индификатор: " << this_thread::get_id() << " Локальный минимальный элемент: " << minElement << endl;
+	mtx.unlock();
+
+	return minElement;
+}
+
+int findMinSync(const vector<int> &vect, const int begin, const int end) {
+	int min = vect[begin];
+	for (int i = begin + 1; i < end; ++i) {
+		if (min > vect[i]) {
+			min = vect[i];
+		}
+	}
+
+	return min;
+}
 
 int main() {
-	srand(time(nullptr));
-	setlocale(0, "ru");
-	int N, numberOfThread, min;
+	srand(time(NULL));
+	setlocale(0, "");
+	int N, numberOfThreads, min;
 	vector<int> vect, minVect;
 	MyTimer* timer = new MyTimer();
-	float elapsedTime = 0;
+	float elapsedTime = 0.0;
 	cout << "Введите количество элементов: "; cin >> N;
-	if (N <= 0) 
-	{
+	if (N <= 0) {
 		cout << "Ошибка" << endl;
 		return 1;
 	}
 	vect.resize(N);
 	for (int i = 0; i < N; i++)
 		vect[i] = rand() % N - N / 2;
-	cout << "Введите количество потоков: "; cin >> numberOfThread;
+	for (int i = 0; i < N; i++)
+		cout << vect[i] << " ";
+	cout << endl;
 
-	if (numberOfThread <= 0) 
-	{
-		findMin(vect, 0, N, elapsedTime, min, timer);
-		cout << "Минимальный элемент: " << min << endl;
-		system("pause");
-		return 0;
-	}
-	minVect.resize(numberOfThread);
-	thread* arrThread = new thread[numberOfThread];
-	int sizeOfWork = N / numberOfThread;
-	for (int i = 0; i < numberOfThread; i++) 
-	{	
-		int beg = i * sizeOfWork;
-		int end;
-		if (i == numberOfThread - 1)
-			end = N;
-		else
-			end = (i + 1) * sizeOfWork;
-		arrThread[i] = thread(findMin, std::ref(vect), beg, end, std::ref(elapsedTime),
-			std::ref(minVect[i]), timer);
-	}
-	for (int i = 0; i < numberOfThread; i++)
-		arrThread[i].join();
-	cout << endl << endl << "                  ----   Потоки закончили свою работу   ----          " << endl << endl;
-	findMin(minVect, 0, minVect.size(), elapsedTime, min, timer);
-	cout << "Минимальный элемент: " << min << endl;
-	cout << "Прошло время для асинхронной работы: " << fixed << elapsedTime << endl;
+	cout << "Введите количество потоков: "; cin >> numberOfThreads;
 
-	elapsedTime = 0;
-	cout << endl << endl;
-	findMin(vect, 0, N, elapsedTime, min, timer);
-	cout << "Минимальный элемент среди экстремумов: " << min << endl;
-	cout << "Прошло время: " << fixed << elapsedTime << " секунд " << std::endl;
-	delete[] arrThread;
+	timer->Start();
+	min = findMinSync(vect, 0, N);
+	elapsedTime = timer->GetElapsedTime();
+
+	cout << endl << "Минимальный элемент(синхр): " << min << endl;
+	cout << "Прошло время для синхронной работы: " << fixed << elapsedTime << endl << endl;
+
+	timer->Start();
+	min = findMinAsync(vect, numberOfThreads);
+	elapsedTime = timer->GetElapsedTime();
+
+	cout << endl << "Минимальный элемент (асинхр): " << min << endl;
+	cout << "Прошло время для асинхронной работы: " << fixed << elapsedTime << endl << endl;
+
+
 	delete timer;
 	system("pause");
 
 	return 0;
 }
+
